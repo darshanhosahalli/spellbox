@@ -495,6 +495,7 @@ function mockResponse(textarea, url) {
 
 // devtools.js
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('message:- ', message);
     if (message.action === "fetch-inject") {
         if(message.data) {
             if(message.data && message.data.type && message.data.type === "response") {

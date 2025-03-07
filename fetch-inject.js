@@ -42,8 +42,78 @@
         }
     };
 
+    const OriginalXHR = window.XMLHttpRequest;
+
+    class MockXHR extends OriginalXHR {
+
+        constructor() {
+            super();
+            this._url = null;
+        }
+
+        open(method, url, async = true, user = null, password = null) {
+            this._url = url; // Store the request URL
+            super.open(method, url, async, user, password);
+        }
+
+        send() {
+            if (responsesToMock[this._url]) {
+                setTimeout(() => {
+                    // Define properties instead of directly assigning values
+                    Object.defineProperty(this, "readyState", { value: 4, configurable: true }); // Set readyState to DONE
+                    Object.defineProperty(this, "status", { value: 200, configurable: true }); // Mock successful status
+                    Object.defineProperty(this, "responseText", {
+                        value: responsesToMock[this._url],
+                        configurable: true
+                    });
+    
+                    // Trigger the event handler if defined
+                    if (typeof this.onreadystatechange === "function") {
+                        this.onreadystatechange();
+                    }
+                    if (typeof this.onload === "function") {
+                        this.onload();
+                    }
+    
+                }, 100); // Simulating async delay
+    
+                return; // Prevent actual request from being sent
+            }
+            const eventCallback = this.onreadystatechange;
+            this.onreadystatechange = function () {
+                if (this.readyState === 4) {
+                    if (this.status >= 200 && this.status < 300) {
+                        try {
+                            const data = JSON.parse(this.responseText);
+                            const json = {};
+                            json['status'] = this.status;
+                            json['response_body'] = JSON.stringify(data);
+                            sendMessageToContentScript({
+                                type: 'response',
+                                url: this.responseURL,
+                                payload: json
+                            });
+                            eventCallback();
+                        } catch (error) {
+                            console.error('Error parsing JSON:', error);
+                            eventCallback();
+                        }
+                    }
+                }
+                eventCallback();
+            };
+            super.send();
+        }
+    }
+
+    window.XMLHttpRequest = MockXHR;
+
     function sendMessageToContentScript(data) {
-        window.postMessage({ source: "fetch-inject", data }, "*");
+        try {
+            window.postMessage({ source: "fetch-inject", data }, "*");
+        } catch(error) {
+            console.log('data:- '+ data+ 'error:- '+error);
+        }
     }
 
     //console.log('XMLHttpRequest:- ', window.XMLHttpRequest);
